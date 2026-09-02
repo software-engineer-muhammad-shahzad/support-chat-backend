@@ -40,11 +40,14 @@ SECRET_KEY = os.environ.get(
 # SECURITY WARNING: don't run with debug turned on in production.
 DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", ".onrender.com", *env_list("ALLOWED_HOSTS")]
+_HOST_SUFFIXES = [".onrender.com", ".koyeb.app", ".hf.space", ".railway.app", ".fly.dev"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", *_HOST_SUFFIXES, *env_list("ALLOWED_HOSTS")]
 if os.environ.get("RENDER_EXTERNAL_HOSTNAME"):
     ALLOWED_HOSTS.append(os.environ["RENDER_EXTERNAL_HOSTNAME"])
 
-CSRF_TRUSTED_ORIGINS = ["https://*.onrender.com", *env_list("CSRF_TRUSTED_ORIGINS")]
+CSRF_TRUSTED_ORIGINS = [
+    f"https://*{suffix}" for suffix in _HOST_SUFFIXES
+] + env_list("CSRF_TRUSTED_ORIGINS")
 
 # Render terminates TLS at its proxy.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
