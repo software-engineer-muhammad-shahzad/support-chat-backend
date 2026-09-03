@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 import dj_database_url
@@ -40,14 +41,20 @@ SECRET_KEY = os.environ.get(
 # SECURITY WARNING: don't run with debug turned on in production.
 DEBUG = os.environ.get("DEBUG", "True").lower() == "true"
 
-_HOST_SUFFIXES = [".onrender.com", ".koyeb.app", ".hf.space", ".railway.app", ".fly.dev"]
+_HOST_SUFFIXES = [
+    ".onrender.com",
+    ".koyeb.app",
+    ".hf.space",
+    ".railway.app",
+    ".fly.dev",
+]
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", *_HOST_SUFFIXES, *env_list("ALLOWED_HOSTS")]
 if os.environ.get("RENDER_EXTERNAL_HOSTNAME"):
     ALLOWED_HOSTS.append(os.environ["RENDER_EXTERNAL_HOSTNAME"])
 
-CSRF_TRUSTED_ORIGINS = [
-    f"https://*{suffix}" for suffix in _HOST_SUFFIXES
-] + env_list("CSRF_TRUSTED_ORIGINS")
+CSRF_TRUSTED_ORIGINS = [f"https://*{suffix}" for suffix in _HOST_SUFFIXES] + env_list(
+    "CSRF_TRUSTED_ORIGINS"
+)
 
 # Render terminates TLS at its proxy.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
@@ -64,6 +71,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Third-party
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
     # local apps
     "accounts",
@@ -171,6 +179,18 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+}
+
+
+# djangorestframework-simplejwt
+# https://django-rest-framework-simplejwt.readthedocs.io/
+
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(minutes=3),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
 }
 
 
