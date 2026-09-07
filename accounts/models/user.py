@@ -10,6 +10,9 @@ class User(AbstractUser):
         CUSTOMER = "customer", "Customer"
         AGENT = "agent", "Support Agent"
         ADMIN = "admin", "Admin"
+        # System-level account — full access, including managing other admins.
+        # Never created through the API; only via `manage.py create_superadmin`.
+        SUPER_ADMIN = "super_admin", "Super Admin"
 
     # Log in with email. `username` is kept only as a display name —
     # overridden here to drop AbstractUser's unique=True + validators, so

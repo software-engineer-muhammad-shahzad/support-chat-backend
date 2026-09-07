@@ -22,4 +22,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/auth/", include("accounts.urls.auth")),
     path("api/admin/", include("accounts.urls.admin")),
+    path("api/admin/", include("accounts.urls.agents")),
+    path("api/users/", include("accounts.urls.users")),
+    path("api/conversations/", include("conversations.urls")),
 ]

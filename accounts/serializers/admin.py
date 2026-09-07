@@ -6,6 +6,13 @@ from .base import StrictFieldsMixin
 
 User = get_user_model()
 
+# super_admin can never be granted through the API — only via
+# `manage.py create_superadmin`. Every role-accepting serializer below is
+# restricted to this list as defense in depth, on top of the view-level checks.
+ASSIGNABLE_ROLES = [
+    choice for choice in User.Role.choices if choice[0] != User.Role.SUPER_ADMIN
+]
+
 
 class AdminUserSerializer(serializers.ModelSerializer):
     """Read representation used for list / detail."""
@@ -32,7 +39,7 @@ class AdminUserCreateSerializer(StrictFieldsMixin, serializers.ModelSerializer):
     phone = serializers.CharField(
         max_length=20, required=False, allow_blank=True, default=""
     )
-    role = serializers.ChoiceField(choices=User.Role.choices)
+    role = serializers.ChoiceField(choices=ASSIGNABLE_ROLES)
 
     class Meta:
         model = User
@@ -55,13 +62,17 @@ class AdminUserCreateSerializer(StrictFieldsMixin, serializers.ModelSerializer):
 
 
 class AdminUserUpdateSerializer(StrictFieldsMixin, serializers.ModelSerializer):
-    """Promote / demote / deactivate a user."""
+    """Promote / demote a user's profile fields and role.
 
-    role = serializers.ChoiceField(choices=User.Role.choices, required=False)
+    Active/inactive is deliberately not here — that's
+    AdminUserActivateView / AdminUserDeactivateView's job.
+    """
+
+    role = serializers.ChoiceField(choices=ASSIGNABLE_ROLES, required=False)
 
     class Meta:
         model = User
-        fields = ["username", "phone", "role", "is_active"]
+        fields = ["username", "phone", "role"]
 
     def update(self, instance, validated_data):
         instance = super().update(instance, validated_data)

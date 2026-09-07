@@ -75,7 +75,11 @@ INSTALLED_APPS = [
     "corsheaders",
     # local apps
     "accounts",
+    "conversations",
+    "chat_messages",
+    "channels",
 ]
+
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -106,7 +110,10 @@ TEMPLATES = [
     },
 ]
 
+
+ASGI_APPLICATION = "backend.asgi.application"
 WSGI_APPLICATION = "config.wsgi.application"
+
 
 
 # Database
@@ -186,8 +193,8 @@ REST_FRAMEWORK = {
 # https://django-rest-framework-simplejwt.readthedocs.io/
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=1),
-    "REFRESH_TOKEN_LIFETIME": timedelta(minutes=3),
+    "ACCESS_TOKEN_LIFETIME": timedelta(hours=12),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": True,
@@ -203,14 +210,35 @@ CORS_ALLOWED_ORIGINS = [
     *env_list("CORS_ALLOWED_ORIGINS"),
 ]
 
+# In development, accept the Next.js dev server on any localhost port
+# (it hops to 3001/3002/... when 3000 is taken).
+if DEBUG:
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^http://localhost:\d+$",
+        r"^http://127\.0\.0\.1:\d+$",
+    ]
+
 
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
-MAILERS = {
-    "default": {
-        "BACKEND": "django.core.mail.backends.console.EmailBackend",
-    },
-}
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() == "true"
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@example.com")
+
+if EMAIL_HOST and EMAIL_HOST_PASSWORD:
+    EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+else:
+    # No SMTP configured — print emails to the console instead of failing.
+    EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+
+# Where the frontend runs — used to build links inside emails (e.g. password reset).
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+
+# Password-reset links expire after 1 hour (default is 3 days).
+PASSWORD_RESET_TIMEOUT = 60 * 60
 
 AUTH_USER_MODEL = "accounts.User"
