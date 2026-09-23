@@ -23,6 +23,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Load environment variables from backend/.env (never committed).
 load_dotenv(BASE_DIR / ".env")
 
+# Must come after load_dotenv() above — reading it any earlier means the
+# .env file hasn't been loaded into the environment yet, so this is always
+# None regardless of what's actually in .env.
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+OCR_SPACE_API_KEY = os.getenv("OCR_SPACE_API_KEY")
+
 
 def env_list(name, default=""):
     return [
@@ -63,6 +70,7 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # Application definition
 
 INSTALLED_APPS = [
+    "daphne",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -73,10 +81,20 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
+    "storages",
     # local apps
     "accounts",
+    # The AI assistant/tool-use app (agents/services/agent.py) — not to be
+    # confused with human support agents, which live in accounts/ (see
+    # accounts.urls.agents, /api/admin/agents/).
+    "agents",
     "conversations",
     "chat_messages",
+    "documents",
+    # Retrieval + reranking only (rag/services/pipeline.py) — no models or
+    # HTTP endpoints of its own; documents/ owns storage and ingestion,
+    # agents/ owns the HTTP surface and decides when to call this.
+    "rag",
     "channels",
 ]
 
@@ -111,9 +129,8 @@ TEMPLATES = [
 ]
 
 
-ASGI_APPLICATION = "backend.asgi.application"
+ASGI_APPLICATION = "config.asgi.application"
 WSGI_APPLICATION = "config.wsgi.application"
-
 
 
 # Database
@@ -121,13 +138,34 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 # Reads the DATABASE_URL env var (see backend/.env). Falls back to local
 # SQLite when it isn't set. Add ?sslmode=require to the URL for Supabase.
+#
+# DATABASE_URL points at Supabase's *transaction*-mode pooler (port 6543),
+# not session mode (5432, capped at 15 slots — this app's polling exhausted
+# that repeatedly). Transaction mode's connection cap is much higher, so
+# holding a connection open for a bit (conn_max_age) is safe here in a way
+# it wasn't on session mode.
+#
+# conn_max_age was briefly 0 (never reuse) on the theory that the pooler
+# makes each fresh connection cheap — measured directly, it isn't: opening
+# a brand new client connection from this process to the pooler (TCP + TLS
+# to a remote region) costs ~1-1.5s regardless of pooler mode; pooler mode
+# only affects how fast Postgres assigns a backend *after* that. That cost
+# was landing on every single websocket connect (a fresh thread touching
+# the DB for the first time), which is what made "user just came online"
+# feel slow. 60s lets a connection be reused across requests/threads within
+# that window instead of paying setup cost every time.
 DATABASES = {
     "default": dj_database_url.config(
         default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
-        conn_max_age=600,
+        conn_max_age=60,
         conn_health_checks=True,
     )
 }
+
+# Django's own recommendation when the connection is behind pgbouncer in
+# transaction-pooling mode: server-side (named) cursors aren't safe to use
+# across a connection that may be handed to a different client mid-cursor.
+DISABLE_SERVER_SIDE_CURSORS = True
 
 
 # Password validation
@@ -174,6 +212,35 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
     },
 }
+
+# User-uploaded files (attachments, etc.) — Supabase Storage over its
+# S3-compatible API. Falls back to local disk (the FileSystemStorage above)
+# when SUPABASE_S3_BUCKET isn't set, so a fresh checkout without Supabase
+# creds still works. Credentials come from Supabase Dashboard -> Storage ->
+# S3 Connection -> "New access key" — NOT the anon/service_role API keys.
+AWS_STORAGE_BUCKET_NAME = os.environ.get("SUPABASE_S3_BUCKET", "")
+AWS_ACCESS_KEY_ID = os.environ.get("SUPABASE_S3_ACCESS_KEY_ID", "")
+AWS_SECRET_ACCESS_KEY = os.environ.get("SUPABASE_S3_SECRET_ACCESS_KEY", "")
+AWS_S3_ENDPOINT_URL = os.environ.get("SUPABASE_S3_ENDPOINT_URL", "")
+AWS_S3_REGION_NAME = os.environ.get("SUPABASE_S3_REGION", "ap-northeast-2")
+# Supabase's S3 endpoint only understands path-style addressing
+# (<endpoint>/<bucket>/<key>) — virtual-hosted-style (<bucket>.<endpoint>) 404s.
+AWS_S3_ADDRESSING_STYLE = "path"
+# Supabase Storage doesn't support per-object S3 ACLs.
+AWS_DEFAULT_ACL = None
+AWS_S3_FILE_OVERWRITE = False
+# Supabase's S3 gateway 403s a plain, unsigned GET even on a bucket marked
+# "public" in the dashboard — that public/private toggle only affects
+# Supabase's own Storage REST API (the /storage/v1/object/public/... route),
+# not the raw S3-compatible endpoint we're using here. So every URL needs a
+# SigV4 querystring signature to actually be fetchable — verified directly:
+# an unsigned URL 403s, a signed one 200s. Signed URLs expire after
+# AWS_QUERYSTRING_EXPIRE (default 3600s/1hr); that's fine since the
+# serializer resolves the URL fresh on every request rather than storing it.
+AWS_QUERYSTRING_AUTH = True
+
+if AWS_STORAGE_BUCKET_NAME:
+    STORAGES["default"] = {"BACKEND": "storages.backends.s3.S3Storage"}
 
 
 # Django REST Framework
@@ -242,3 +309,68 @@ FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 PASSWORD_RESET_TIMEOUT = 60 * 60
 
 AUTH_USER_MODEL = "accounts.User"
+
+
+# Redis — the channel layer (Channels' own pub/sub plumbing) and this app's
+# own online/offline presence tracking (chat_messages/presence.py) both sit
+# on the same instance. Defaults to a local Redis for dev; set REDIS_URL in
+# .env to point at anything else (a managed Redis, a different port, etc.).
+REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "chat_messages.channel_layer.FastRedisChannelLayer",
+        "CONFIG": {
+            "hosts": [
+                {
+                    "address": REDIS_URL,
+                    # A managed Redis (Upstash and friends) can silently drop
+                    # a connection that's sat idle between group messages —
+                    # the client only discovers this the next time it tries
+                    # to read, as a raw TimeoutError that (unhandled) used to
+                    # take the whole websocket down with it, not just this
+                    # one Redis call. `retry_on_timeout` gives it one retry
+                    # (which opens a fresh connection) before giving up, and
+                    # `health_check_interval` pings idle connections
+                    # proactively so they're refreshed before that happens.
+                    "retry_on_timeout": True,
+                    "health_check_interval": 30,
+                }
+            ],
+        },
+    },
+}
+
+# Celery — background task queue (conversations/tasks.py).
+#
+# Broker (the queue Celery dispatches tasks through): CloudAMQP (RabbitMQ),
+# set via CELERY_BROKER_URL in .env — never hardcoded here, it carries
+# credentials. Falls back to the Redis instance below if unset, so a fresh
+# checkout without CloudAMQP configured still has a working (if less
+# production-shaped) broker instead of Celery's own default of "RabbitMQ on
+# localhost", which nothing here runs.
+#
+# Result backend: the same Redis already used for the channel
+# layer/presence — task results don't need their own separate store.
+# A rediss:// (TLS) URL — Upstash and most managed Redis — needs an explicit
+# ssl_cert_reqs param for Celery's redis client specifically; unlike
+# channels_redis, it refuses to guess a default and just errors out.
+# CERT_NONE matches what channels_redis already does here silently (see
+# CHANNEL_LAYERS above) — trusted host, not worth failing startup over.
+_CELERY_RESULT_BACKEND = REDIS_URL
+if (
+    _CELERY_RESULT_BACKEND.startswith("rediss://")
+    and "ssl_cert_reqs" not in _CELERY_RESULT_BACKEND
+):
+    _sep = "&" if "?" in _CELERY_RESULT_BACKEND else "?"
+    _CELERY_RESULT_BACKEND = f"{_CELERY_RESULT_BACKEND}{_sep}ssl_cert_reqs=CERT_NONE"
+
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", REDIS_URL)
+CELERY_RESULT_BACKEND = _CELERY_RESULT_BACKEND
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+# Celery 6 will stop retrying a down broker at startup unless this is set —
+# opt in now rather than get surprised later.
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True

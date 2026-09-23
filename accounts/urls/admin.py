@@ -5,6 +5,7 @@ from accounts.views import (
     AdminUserDeactivateView,
     AdminUserDetailView,
     AdminUserListCreateView,
+    AgentWorkloadView,
 )
 
 urlpatterns = [
@@ -19,5 +20,10 @@ urlpatterns = [
         "users/<int:pk>/activate/",
         AdminUserActivateView.as_view(),
         name="admin-user-activate",
+    ),
+    path(
+        "agents/workload/",
+        AgentWorkloadView.as_view(),
+        name="admin-agent-workload",
     ),
 ]

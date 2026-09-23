@@ -2,6 +2,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from chat_messages.presence import is_online
+
 from .base import StrictFieldsMixin
 
 User = get_user_model()
@@ -30,6 +32,27 @@ class AdminUserSerializer(serializers.ModelSerializer):
             "date_joined",
         ]
         read_only_fields = fields
+
+
+class AgentWorkloadSerializer(serializers.ModelSerializer):
+    """One agent's current load, for the admin "who should I assign this
+    to?" decision — see AgentWorkloadView. `workload` comes from an
+    `annotate(Count(...))` on the queryset, not a DB column, so it's
+    read-only and only ever populated by that view."""
+
+    workload = serializers.IntegerField(read_only=True)
+    online = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["id", "username", "email", "workload", "online"]
+        read_only_fields = fields
+
+    def get_online(self, obj) -> bool:
+        online_ids = self.context.get("online_ids")
+        if online_ids is not None:
+            return obj.id in online_ids
+        return is_online(obj.id)
 
 
 class AdminUserCreateSerializer(StrictFieldsMixin, serializers.ModelSerializer):

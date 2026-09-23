@@ -32,6 +32,18 @@ class Conversation(models.Model):
         default=Status.OPEN,
     )
 
+    # Soft delete, per side. "Removing" a conversation (any status but
+    # closed) just hides it from that side's own list — the row, its
+    # messages and everyone else's view are untouched. Nothing here is ever
+    # hard-deleted, and new activity un-hides it again
+    # (chat_messages.views.MessageListCreateView).
+    is_customer_deleted = models.BooleanField(default=False)
+    is_agent_deleted = models.BooleanField(default=False)
+    # Admin-tier isn't tied to one specific user the way customer/agent are
+    # — every admin/super_admin shares one "oversight" view — so this hides
+    # it from that whole tier at once, not from one particular admin.
+    is_admin_deleted = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

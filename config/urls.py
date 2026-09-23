@@ -18,11 +18,23 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 
+from conversations.views import ConversationAdminAssignView
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/auth/", include("accounts.urls.auth")),
     path("api/admin/", include("accounts.urls.admin")),
     path("api/admin/", include("accounts.urls.agents")),
+    path(
+        "api/admin/conversations/<int:pk>/assign/",
+        ConversationAdminAssignView.as_view(),
+        name="admin-conversation-assign",
+    ),
     path("api/users/", include("accounts.urls.users")),
     path("api/conversations/", include("conversations.urls")),
+    path("api/conversations/", include("chat_messages.urls")),
+    path("api/documents/", include("documents.urls")),
+    # The AI assistant (agents/services/agent.py) — distinct from
+    # api/admin/agents/ above, which manages human support staff.
+    path("api/agents/", include("agents.urls")),
 ]

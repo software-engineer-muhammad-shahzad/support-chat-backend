@@ -1,6 +1,6 @@
 """Admin-only user management API  (/api/admin/users/)."""
 
-from django.db.models import Q
+from django.db.models import Count, Q
 from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.generics import get_object_or_404
@@ -14,7 +14,10 @@ from accounts.serializers import (
     AdminUserCreateSerializer,
     AdminUserSerializer,
     AdminUserUpdateSerializer,
+    AgentWorkloadSerializer,
 )
+from chat_messages.presence import bulk_online_ids
+from conversations.models import Conversation
 
 
 def _is_super_admin(user) -> bool:
@@ -159,3 +162,45 @@ class AdminUserActivateView(APIView):
             user.is_active = True
             user.save(update_fields=["is_active"])
         return Response(AdminUserSerializer(user).data)
+
+
+class AgentWorkloadView(generics.ListAPIView):
+    """GET /api/admin/agents/workload/ -> every active agent, annotated with
+    how many conversations they're currently busy with — so an admin
+    picking who to assign a new conversation to can see who actually has
+    room, instead of guessing from the "Assigned to X" labels in the queue.
+
+    "Workload" = conversations in `assigned` status specifically — the
+    agent has it and is actively working it. Not `resolved` (that's
+    basically done) and not `closed` (fully done). Computed in the DB via
+    annotate(Count(..., filter=...)), one query for every agent rather than
+    N queries counting each agent's conversations separately.
+
+    Sorted lightest-load-first so the best candidate is right at the top.
+    Admin-tier only.
+    """
+
+    serializer_class = AgentWorkloadSerializer
+    permission_classes = [IsAdminRole]
+
+    def get_queryset(self):
+        return (
+            User.objects.filter(role=User.Role.AGENT, is_active=True)
+            .annotate(
+                workload=Count(
+                    "assigned_conversations",
+                    filter=Q(
+                        assigned_conversations__status=Conversation.Status.ASSIGNED
+                    ),
+                )
+            )
+            .order_by("workload", "username")
+        )
+
+    def list(self, request, *args, **kwargs):
+        agents = list(self.get_queryset())
+        online_ids = bulk_online_ids([agent.id for agent in agents])
+        serializer = self.get_serializer(
+            agents, many=True, context={"online_ids": online_ids}
+        )
+        return Response(serializer.data)

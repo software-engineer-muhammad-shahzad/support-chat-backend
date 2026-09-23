@@ -2,6 +2,7 @@ from .admin import (
     AdminUserCreateSerializer,
     AdminUserSerializer,
     AdminUserUpdateSerializer,
+    AgentWorkloadSerializer,
 )
 from .agent import AgentCreateSerializer, AgentSerializer, AgentUpdateSerializer
 from .auth import LoginSerializer, SignupSerializer
@@ -18,6 +19,7 @@ __all__ = [
     "AdminUserSerializer",
     "AdminUserCreateSerializer",
     "AdminUserUpdateSerializer",
+    "AgentWorkloadSerializer",
     "AgentSerializer",
     "AgentCreateSerializer",
     "AgentUpdateSerializer",

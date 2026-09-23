@@ -3,6 +3,7 @@ from .admin import (
     AdminUserDeactivateView,
     AdminUserDetailView,
     AdminUserListCreateView,
+    AgentWorkloadView,
 )
 from .agent import AdminAgentDetailView, AdminAgentListCreateView
 from .auth import LoginView, SignupView, auth_response
@@ -19,6 +20,7 @@ __all__ = [
     "AdminUserDetailView",
     "AdminUserActivateView",
     "AdminUserDeactivateView",
+    "AgentWorkloadView",
     "AdminAgentListCreateView",
     "AdminAgentDetailView",
     "UserProfileView",
