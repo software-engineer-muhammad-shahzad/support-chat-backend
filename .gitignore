@@ -16,6 +16,6 @@ db.sqlite3-journal
 /media/
 
 # Env
-.env
-.env.*
 !.env.example
+config.bat
+node_modules
