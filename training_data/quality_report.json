@@ -1,0 +1,37 @@
+{
+  "total_examples": 11,
+  "average_score": 1.0,
+  "metrics": {
+    "grounded": {
+      "passed": 11,
+      "total": 11,
+      "percentage": 100.0
+    },
+    "relevant": {
+      "passed": 11,
+      "total": 11,
+      "percentage": 100.0
+    },
+    "correct": {
+      "passed": 11,
+      "total": 11,
+      "percentage": 100.0
+    },
+    "concise": {
+      "passed": 11,
+      "total": 11,
+      "percentage": 100.0
+    },
+    "professional": {
+      "passed": 11,
+      "total": 11,
+      "percentage": 100.0
+    },
+    "hallucination": {
+      "detected": 0,
+      "total": 11,
+      "percentage": 0.0
+    }
+  },
+  "status": "PASS"
+}

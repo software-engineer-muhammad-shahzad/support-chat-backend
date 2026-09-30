@@ -1,0 +1,12 @@
+[
+  {
+    "question": "How long does a refund take?",
+    "context": "Approved refunds are processed within 5-7 business days.",
+    "answer": "Approved refunds are processed within 5-7 business days."
+  },
+  {
+    "question": "Can I get a refund?",
+    "context": "Customers can request a refund within 30 days of purchase.",
+    "answer": "Yes. Customers can request a refund within 30 days of purchase."
+  }
+]
